@@ -12,12 +12,15 @@ def _main():
 	argParser = argparse.ArgumentParser(description='Scan any wordpress powered website and identify plugins installed')
 	argParser.add_argument('-s', '--scan', metavar='<website url>', dest='url', help='scan website at <website url>')
 	argParser.add_argument('-u', '--update', type=int, metavar='<page number>', dest='pageN', help='update the list of plugins from wordpress.org up to <page number>')
+	argParser.add_argument('-a', '--all', metavar='<plugin name>', dest='pluginName', help='scaning all preset sites to look for <plugin name>')
 	args = argParser.parse_args()
 	try:
-		if args.url == args.pageN == None:
+		if args.url == args.pageN == args.pluginName == None:
 			argParser.print_help()
+		elif args.pluginName != None:
+			scanSites(args.pluginName)
 		elif args.url != None:
-			scan(args.url)
+			scanPlugins(args.url)
 		else:
 			update(args.pageN)
 	except IOError as e:
@@ -30,12 +33,6 @@ def _isUrl(url):
 	else:
 		return False
 
-# def _isWebsiteAlive(url):
-	
-	# if readURL(url).c == 200:
-		# return True
-	# else:
-		# return False
 
 def _parseHrefs(html):
 	doc = lxml.html.document_fromstring(html)
@@ -54,22 +51,40 @@ def _writePlugins(pluginsList):
 	pluginsFile.write('\n'.join(pluginsList))
 	pluginsFile.close()
 
-def scan(url):
+def scanSites(pluginName):
+	print 'Scanning all sites for {0}...'.format(pluginName)
+	currentDir = os.path.dirname(os.path.realpath(__file__)) + os.path.sep
+	siteURLs = open(currentDir + 'sites.txt', 'r')
+	for url in siteURLs.read().split('\n'):
+		url = url.strip()
+		if not url.startswith("#"):
+			pluginURL = 'http://' + url + '/wp-content/plugins/' + pluginName + '/'
+			code = readURL(pluginURL)
+			if code == False:
+				continue
+			#print 'site:{0} -- code:{1}'.format(url,code)			
+			if code == 403:
+				print url + '[+]'
+	print "Scanning Complete!"		
+				
+def scanPlugins(url):
 	if _isUrl(url) != True:
 		print 'The url you entered should match this pattern ^https?://[\w\d\-\.]+/(([\w\d\-]+/)+)?$'
 		return
-	# elif _isWebsiteAlive(url) != True:
-		# print 'the url {0} is not live'.format(url)
-		# return
+		
 	print 'Scanning...'
 	currentDir = os.path.dirname(os.path.realpath(__file__)) + os.path.sep
 	pluginsFile = open(currentDir + 'plugins.txt', 'r')
 	for line in pluginsFile.read().split('\n'):
 		if line:
 			code = readURL(url + 'wp-content/plugins/' + line + '/')
+			if code == False:
+				continue
+			
 			if code != 404:
 				print line + '[+]'
-
+	print "Scanning Complete!"
+	
 def update(pageN):
 	pluginsList = []
 	if pageN == 1:
@@ -105,6 +120,10 @@ def readURL(url):
 		elif e.code == 404:
 			return 404
 		else:
-			print u'**ERROR**: {0} : {1}\t--IGNORE--' .format(url, e)     
-
+			print u'**ERROR**: {0} : {1}\t--IGNORE--' .format(url, e)		
+			return False
+	except urllib2.URLError as e:
+		print u'**ERROR**: {0} is not available: {1} \t--IGNORE--' .format(url, e)
+		return False
+		
 if __name__ == "__main__": _main()
