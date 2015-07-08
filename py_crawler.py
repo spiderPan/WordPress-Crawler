@@ -62,10 +62,8 @@ def _requestURL(url):
         req = urllib2.urlopen(request)
         return req
     except urllib2.HTTPError as e:
-        if e.code == 403:
-            return 403
-        elif e.code == 404:
-            return 404
+        if e.code:
+            return e
         else:
             print u'**ERROR**: {0} : {1}\t--IGNORE--' .format(url, e)
             return False
@@ -76,10 +74,13 @@ def _requestURL(url):
 
 def _readURL(url):
     response = _requestURL(url)
-    content = response.read()
-    data = StringIO.StringIO(content)
-    gzipper = gzip.GzipFile(fileobj=data)
-    html = gzipper.read()
+    if response.info().get('Content-Encoding') == 'gzip':
+        content = response.read()
+        data = StringIO.StringIO(content)
+        gzipper = gzip.GzipFile(fileobj=data)
+        html = gzipper.read()
+        return html
+    html = response.read()
     return html
 
 
@@ -98,11 +99,17 @@ def scanSites(pluginName):
         url = url.strip()
         if not url.startswith("#"):
             pluginURL = 'http://' + url + '/wp-content/plugins/' + pluginName + '/'
-            code = _requestURL(pluginURL)
+            code = _requestURL(pluginURL).code	
+            #print code			
             if code is False:
                 continue
-            if code == 403:
-                print url + '[+]'
+            elif code in (403,304):
+				print url + '[+]'
+            else:
+				result = _readURL(pluginURL).strip()
+				standard = 'Viewing directory contents is not permitted.'
+				if (standard.split(' ') == result.split(' ')):
+					print url + '[+]'
     print "Scanning Complete!"
 
 
